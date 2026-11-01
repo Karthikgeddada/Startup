@@ -1,0 +1,10 @@
+[project]
+name = "curvin-backend"
+version = "1.0.0"
+description = "CURVIN Agent Engine — FastAPI backend for the CURVIN autonomous software engineering platform"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
