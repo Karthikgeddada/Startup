@@ -18,23 +18,23 @@ import type { DiscoverEntry } from "@/types/domain";
  */
 export function DiscoverView() {
   const discoverQuery = useDiscoverEntries();
-  const entries = discoverQuery.data ?? [];
 
   const grouped = useMemo(() => {
+    const list = discoverQuery.data ?? [];
     const map = new Map<string, DiscoverEntry[]>();
-    for (const entry of entries) {
-      const list = map.get(entry.category) ?? [];
-      list.push(entry);
-      map.set(entry.category, list);
+    for (const entry of list) {
+      const existing = map.get(entry.category) ?? [];
+      existing.push(entry);
+      map.set(entry.category, existing);
     }
     return Array.from(map.entries());
-  }, [entries]);
+  }, [discoverQuery.data]);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 pb-24 pt-10 md:px-8">
       <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-foreground">Discover</h1>
       <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-muted-foreground">
-        A curated map of CURVIN's world — verified templates, official docs, and
+        A curated map of CURVIN&rsquo;s world — verified templates, official docs, and
         the integrations planned next. Availability is always labeled honestly.
       </p>
 

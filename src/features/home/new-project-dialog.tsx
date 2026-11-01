@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { GitHub, Sparkles, LayoutTemplate, FilePlus2, GitBranch } from "lucide-react";
+import { Sparkles, LayoutTemplate, FilePlus2, GitBranch } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -20,7 +20,7 @@ import { useUIStore, type NewProjectMode } from "@/stores/ui-store";
 
 const MODES: { id: NewProjectMode; label: string; icon: typeof FilePlus2; hint: string }[] = [
   { id: "blank", label: "Blank", icon: FilePlus2, hint: "Start from an empty project" },
-  { id: "github", label: "GitHub", icon: GitHub, hint: "Import an existing repository" },
+  { id: "github", label: "GitHub", icon: GitBranch, hint: "Import an existing repository" },
   { id: "template", label: "Template", icon: LayoutTemplate, hint: "Start from a vetted template" },
   { id: "ai", label: "Prompt", icon: Sparkles, hint: "Describe it — CURVIN drafts it" },
 ];
