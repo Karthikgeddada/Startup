@@ -98,7 +98,7 @@ export function NewProjectDialog() {
     try {
       const project = await createProject.mutateAsync({
         name: values.name,
-        description: values.description || undefined,
+        description: values.description || "",
         mode: values.mode,
         githubRepoId: values.mode === "github" ? values.githubRepoId : undefined,
         templateId: values.mode === "template" ? values.templateId : undefined,
