@@ -91,6 +91,10 @@ function AgentPanelBody() {
   const isRunning =
     liveMessages?.some((message) => message.role === "agent" && message.status === "running") ?? false;
 
+  // Presence flag for the hydrate effect below — guarded so a null conversation id
+  // never indexes the messages map (typed as Record<string, AgentMessage[]>).
+  const hasLiveMessages = Boolean(activeConversationId && liveMessagesMap[activeConversationId]);
+
   // Hydrate the selected conversation from the service once.
   useEffect(() => {
     if (!activeConversationId || liveMessagesMap[activeConversationId]) return;
@@ -104,7 +108,7 @@ function AgentPanelBody() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- liveMessagesMap identity changes on every hydrate; only the presence flag matters.
-  }, [activeConversationId, hydrateMessages, Boolean(liveMessagesMap[activeConversationId])]);
+  }, [activeConversationId, hydrateMessages, hasLiveMessages]);
 
   // Keep the newest turn in view as blocks stream in.
   useEffect(() => {
