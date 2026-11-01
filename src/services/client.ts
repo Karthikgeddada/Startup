@@ -56,7 +56,7 @@ export async function apiFetch<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const { signal, retries = 2, timeoutMs = 15_000 } = options;
-  const url = `${env.apiBaseUrl}${path}`;
+  const url = `${env.NEXT_PUBLIC_API_BASE_URL}${path}`;
 
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt += 1) {

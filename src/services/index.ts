@@ -10,6 +10,6 @@ import type { CurvinServices } from "@/services/types";
  * labelled demo data. No network calls leave the browser.
  * NEXT_PUBLIC_USE_MOCKS=false: HTTP adapters against NEXT_PUBLIC_API_BASE_URL.
  */
-export const services: CurvinServices = env.useMocks ? mockServices : httpServices;
+export const services: CurvinServices = env.NEXT_PUBLIC_USE_MOCKS ? mockServices : httpServices;
 
 export { env };

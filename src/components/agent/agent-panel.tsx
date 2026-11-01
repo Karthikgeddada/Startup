@@ -192,7 +192,7 @@ function AgentPanelBody() {
             {isRunning ? "Working…" : "Ready"}
           </p>
         </div>
-        {env.useMocks ? (
+        {env.NEXT_PUBLIC_USE_MOCKS ? (
           <Badge variant="warning" className="ml-1">
             Demo data
           </Badge>
