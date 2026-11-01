@@ -1,0 +1,160 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * CURVIN design tokens.
+ * Light theme: white canvas, #f5f5f7 surfaces, restrained #0071e3 accent.
+ * Dark theme: near-black canvas, elevated graphite surfaces, #0a84ff accent.
+ * All component styling references these variables via Tailwind classes only.
+ */
+
+@layer base {
+  :root {
+    /* Surfaces */
+    --background: #ffffff;
+    --foreground: #1d1d1f;
+    --card: #f5f5f7;
+    --card-foreground: #1d1d1f;
+    --popover: #ffffff;
+    --popover-foreground: #1d1d1f;
+    --muted: #f5f5f7;
+    --muted-foreground: #6e6e73;
+    --subtle: #ebebf0;
+    --subtle-foreground: #86868b;
+
+    /* Lines */
+    --border: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.16);
+    --input: rgba(0, 0, 0, 0.12);
+
+    /* Brand */
+    --accent: #0071e3;
+    --accent-hover: #0077ed;
+    --accent-foreground: #ffffff;
+    --accent-soft: rgba(0, 113, 227, 0.1);
+    --ring: #0071e3;
+
+    /* Semantic */
+    --success: #1a7f37;
+    --success-foreground: #ffffff;
+    --success-soft: rgba(26, 127, 55, 0.1);
+    --warning: #b45309;
+    --warning-foreground: #ffffff;
+    --warning-soft: rgba(180, 83, 9, 0.1);
+    --danger: #d70015;
+    --danger-foreground: #ffffff;
+    --danger-soft: rgba(215, 0, 21, 0.08);
+
+    /* Layout metrics */
+    --header-height: 56px;
+    --sidebar-width: 244px;
+    --sidebar-width-collapsed: 64px;
+    --agent-panel-width: 384px;
+  }
+
+  .dark {
+    --background: #0e0e11;
+    --foreground: #f5f5f7;
+    --card: #1c1c20;
+    --card-foreground: #f5f5f7;
+    --popover: #16161a;
+    --popover-foreground: #f5f5f7;
+    --muted: #1c1c20;
+    --muted-foreground: #a1a1a6;
+    --subtle: #2a2a30;
+    --subtle-foreground: #8e8e93;
+
+    --border: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --input: rgba(255, 255, 255, 0.14);
+
+    --accent: #0a84ff;
+    --accent-hover: #2997ff;
+    --accent-foreground: #ffffff;
+    --accent-soft: rgba(10, 132, 255, 0.16);
+    --ring: #0a84ff;
+
+    --success: #32d583;
+    --success-foreground: #06281a;
+    --success-soft: rgba(50, 213, 131, 0.14);
+    --warning: #f0a92c;
+    --warning-foreground: #2b1c02;
+    --warning-soft: rgba(240, 169, 44, 0.14);
+    --danger: #ff453a;
+    --danger-foreground: #ffffff;
+    --danger-soft: rgba(255, 69, 58, 0.12);
+  }
+
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    overscroll-behavior: none;
+  }
+
+  ::selection {
+    background-color: var(--accent-soft);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Accessible, theme-aware motion reduction */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Restrained scrollbars that respect the theme */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbars on horizontal tab strips while keeping scrollability */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Frosted surface used by fixed bars and overlays */
+  .surface-frost {
+    background-color: color-mix(in srgb, var(--popover) 78%, transparent);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+}
