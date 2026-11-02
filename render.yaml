@@ -1,0 +1,37 @@
+# Render blueprint — deploy curvin-backend as a hosted web service.
+#
+# Deploy: dashboard.render.com → New → Blueprint → pick this repo (this file is
+# auto-detected). Postgres comes from Supabase — paste the transaction-pooler
+# URL into DATABASE_URL when Render prompts for it (sync:false = set in
+# dashboard, never committed). Migrations run on every boot via the start
+# command (`alembic upgrade head` is idempotent).
+#
+# Free-plan note: the service sleeps after 15 idle minutes; the first request
+# after sleep takes ~30s to wake. curvin-runner (your Mac) is unaffected — it
+# only needs the service awake when a run dispatches tool jobs.
+services:
+  - type: web
+    name: curvin-backend
+    runtime: python
+    rootDir: curvin-backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.11"
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false # Supabase transaction pooler, e.g. postgresql+psycopg2://postgres.<ref>:<pw>@<host>.pooler.supabase.com:6543/postgres?sslmode=require
+      - key: FRONTEND_URL
+        sync: false # your Vercel frontend origin — enables credentialed CORS
+      - key: LLM_API_KEY
+        sync: false # server-side only; never exposed through the API
+      - key: LLM_PROVIDER
+        sync: false
+      - key: LLM_BASE_URL
+        sync: false
+      - key: LLM_MODEL
+        sync: false
