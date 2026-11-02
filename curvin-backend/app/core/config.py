@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     agent_max_llm_calls: int = 40
     agent_max_total_tokens: int = 200_000
 
+    # curvin-runner dispatch (Phase 4). A runner is "online" if it heartbeated
+    # inside this window; tool jobs fail honestly after the job timeout.
+    runner_online_window_seconds: float = 30.0
+    runner_job_timeout_seconds: float = 120.0
+    runner_poll_interval_seconds: float = 0.5
+
     @property
     def cors_origins(self) -> list[str]:
         if self.frontend_url:

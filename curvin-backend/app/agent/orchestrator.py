@@ -36,8 +36,9 @@ from app.agent.gateway import (
     resolve_roles,
 )
 from app.agent.planner import generate_plan
+from app.agent.runner_dispatch import dispatch_tool
 from app.agent.state import InvalidTransition, RunStatus
-from app.agent.tools import execute_tool, get_tool_specs, tool_permission
+from app.agent.tools import execute_tool, get_tool, get_tool_specs, tool_permission
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.models import AgentRun, Approval, Message, RunEvent, RunTask
@@ -266,7 +267,20 @@ def _invoke_tool(
         )
         return None
 
-    outcome = execute_tool(call.name, call.arguments)
+    tool = get_tool(call.name)
+    if tool is not None and tool.handler is None:
+        # Runner-backed tool (Phase 4): execution happens on the user's
+        # machine via curvin-runner — never on the backend. Without an
+        # online runner this returns an honest runner_unavailable.
+        outcome = dispatch_tool(
+            db,
+            user_id=run.user_id,
+            run_id=run.id,
+            tool=call.name,
+            arguments=call.arguments,
+        )
+    else:
+        outcome = execute_tool(call.name, call.arguments)
     emit_event(
         db,
         run.id,

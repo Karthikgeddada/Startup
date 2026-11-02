@@ -211,3 +211,58 @@ class Approval(TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(32), default="pending")
+
+
+# ------------------------------------------------------- runners (Phase 4)
+
+
+class Runner(TimestampMixin, Base):
+    """A curvin-runner instance on the user's machine.
+
+    Authenticated by a per-runner token (SHA-256 hash stored; the plaintext is
+    returned exactly once at registration). `last_seen_at` drives online status.
+    """
+
+    __tablename__ = "runners"
+
+    id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=lambda: new_id("runnr")
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(255))
+    platform: Mapped[str] = mapped_column(String(64), default="")
+    token_hash: Mapped[str] = mapped_column(String(64))
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class RunnerJob(TimestampMixin, Base):
+    """One tool execution dispatched to a runner (queued → claimed → done).
+
+    `status`: queued → claimed → succeeded | failed | timeout. The orchestrator
+    enqueues; a runner claims and reports; the result flows back into the run
+    event log. Never executed on the backend — local execution only.
+    """
+
+    __tablename__ = "runner_jobs"
+
+    id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=lambda: new_id("job")
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True
+    )
+    runner_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    tool: Mapped[str] = mapped_column(String(64))
+    arguments: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    result: Mapped[dict | None] = mapped_column(JSON)
+    error: Mapped[str | None] = mapped_column(Text)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

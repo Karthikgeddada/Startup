@@ -45,6 +45,24 @@ The frontend adapter (Phase 7) reduces this log into progressive `AgentTurn` sna
 
 Verification: 69/69 pytest on Databricks serverless compute (tests/test_orchestrator.py — scripted FakeGateway: happy path, approval pause/resume, reject→cancel, budget/provider/iteration failures, unconfigured stays created, planner parse/fallback). No live LLM call yet — no key configured.
 
+## Runner protocol (Phase 4 — implemented)
+
+The backend NEVER executes tools. `curvin-runner` is a stdlib-only single-file client (`curvin-runner/curvin_runner.py`) the user launches on their machine; it claims queued jobs, executes them inside a local sandbox, and reports the real result.
+
+Backend side:
+
+- Tables `runners` + `runner_jobs` (migration `b4e2f6a81c53`). Job lifecycle: `queued → claimed → succeeded | failed`; a dispatch timeout marks the job `failed` with the reason — never an invented result.
+- `app/api/v1/runners.py`: `register` (per-runner bearer token shown exactly once; only its SHA-256 hash is stored), list (online = heartbeat inside `RUNNER_ONLINE_WINDOW_SECONDS`, default 30 s), `heartbeat`, `claim` (atomic oldest-queued-job-for-THIS-runner's-user update — a runner can never see another user's jobs), `report result` (409 if the job was already resolved). Runner auth is the bearer token; the user identity comes from the X-User-Id placeholder at registration only.
+- `app/agent/runner_dispatch.py::dispatch_tool`: no online runner → honest `runner_unavailable` without queueing anything; otherwise enqueue + `tool_dispatched` event + a bounded wait (`RUNNER_JOB_TIMEOUT_SECONDS`, default 120 s) polling persisted job state, so a backend restart cannot strand an in-memory promise. Outcomes: runner result, `runner_error`, or `runner_timeout` — all the same shape as `tools.execute_tool` outcomes.
+- Orchestrator wiring: handler-less tools (fs/terminal/git) route through `dispatch_tool`; permission classes and approval gating still apply BEFORE the job is queued, so nothing dangerous reaches the runner without an explicit approval.
+
+Runner side (user's Mac):
+
+- Loop: heartbeat every 10 s, claim-poll every 2 s, execute, report. Commands: `register`, `status`, `run [--once] [--root DIR]`, `test` (offline sandbox self-check, no backend needed).
+- Sandbox: every filesystem path is jailed to the projects root (absolute paths rejected, `..` and symlink escapes rejected after `resolve()`), commands run with cwd inside the root under a 120 s timeout, outputs capped at 64 KB and listings at 500 entries before reporting. Token + root live in `~/.curvin-runner.json` (chmod 600).
+
+Verification: 80/80 pytest on Databricks serverless compute — 11 new tests in `tests/test_runner.py` (register/list with token never leaking, runner auth 401s, claim/report lifecycle incl. double-report 409, cross-user claim isolation, no-runner honesty with nothing queued, full dispatch flow with a background claiming thread, timeout closing the job failed, orchestrator end-to-end with a simulated runner, offline sandbox jail/truncation). `alembic upgrade head` on a fresh DB creates all 11 tables; `curvin_runner.py test` self-check passes offline. Honest limit: no live Mac execution from this compute — the user runs `curvin-runner` locally (see curvin-runner/README.md); no live LLM call yet.
+
 ## Model gateway (Phase 2 — implemented)
 
 Provider-neutral (`app/agent/gateway/`): OpenAI-compatible completions, streaming (SSE chunk parsing + tool-call fragment assembly), embeddings; bounded retries with backoff on 5xx/429/transport errors; fast-fail `ProviderError` on 4xx; per-call usage accounting; per-run `ExecutionBudget` (max LLM calls + max tokens) raising `BudgetExceededError` so agent loops can never run unbounded. Logical roles (fast/planning/code/verification/embedding) resolve from env with per-role overrides, all defaulting to the base model — BYOK, server-side keys only, never exposed through the API (`GET /api/v1/models` reports status only). Tested with httpx.MockTransport; live smoke test pending a real key.

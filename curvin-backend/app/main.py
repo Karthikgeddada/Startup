@@ -16,7 +16,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
-from app.api.v1 import approvals, conversations, health, models, projects, runs
+from app.api.v1 import (
+    approvals,
+    conversations,
+    health,
+    models,
+    projects,
+    runners,
+    runs,
+)
 from app.core.config import get_settings
 
 
@@ -107,6 +115,7 @@ def create_app() -> FastAPI:
     app.include_router(conversations.router, prefix="/api/v1")
     app.include_router(runs.router, prefix="/api/v1")
     app.include_router(approvals.router, prefix="/api/v1")
+    app.include_router(runners.router, prefix="/api/v1")
 
     @app.get("/", tags=["service"])
     def service_info():

@@ -10,7 +10,16 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import AgentRun, Approval, Conversation, Message, Project, ProjectFile
+from app.models import (
+    AgentRun,
+    Approval,
+    Conversation,
+    Message,
+    Project,
+    ProjectFile,
+    Runner,
+    RunnerJob,
+)
 
 # ------------------------------------------------------------------ inputs
 
@@ -152,6 +161,46 @@ class SendMessageResult(BaseModel):
     run: RunOut
 
 
+# ---------------------------------------------------- runners (Phase 4)
+
+
+class RunnerRegisterIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=255)
+    platform: str = Field(default="", max_length=64)
+
+
+class RunnerOut(BaseModel):
+    id: str
+    name: str
+    platform: str
+    status: str  # online | offline
+    lastSeenAt: datetime
+    createdAt: datetime
+
+
+class RunnerRegisteredOut(BaseModel):
+    id: str
+    name: str
+    token: str
+
+
+class ClaimedJobOut(BaseModel):
+    id: str
+    runId: str | None
+    tool: str
+    arguments: dict
+
+
+class JobResultIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["succeeded", "failed"]
+    result: dict = Field(default_factory=dict)
+    error: str | None = None
+
+
 # -------------------------------------------------------------- serializers
 
 
@@ -254,4 +303,21 @@ def approval_out(a: Approval) -> ApprovalOut:
         status=a.status,
         createdAt=a.created_at,
         updatedAt=a.updated_at,
+    )
+
+
+def runner_out(r: Runner, *, online: bool) -> RunnerOut:
+    return RunnerOut(
+        id=r.id,
+        name=r.name,
+        platform=r.platform,
+        status="online" if online else "offline",
+        lastSeenAt=r.last_seen_at,
+        createdAt=r.created_at,
+    )
+
+
+def claimed_job_out(j: RunnerJob) -> ClaimedJobOut:
+    return ClaimedJobOut(
+        id=j.id, runId=j.run_id, tool=j.tool, arguments=dict(j.arguments or {})
     )

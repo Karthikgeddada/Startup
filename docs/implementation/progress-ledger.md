@@ -41,11 +41,23 @@ Honest limit: no live provider call yet (no LLM_API_KEY configured). Wire format
 | P3-4 | Router wiring (message → background orchestrate; approve → background resume) | VERIFIED | curvin-backend/app/api/v1/conversations.py, approvals.py | integration test: unconfigured gateway leaves run `created` with exactly [run_created] event (Phase 1 contract preserved); approval test drives the same resume path the router schedules |
 | P3-5 | Orchestrator test suite | VERIFIED | curvin-backend/tests/test_orchestrator.py | 69/69 pytest on Databricks serverless compute 2026-11-02 (60 prior + 9 new: happy path, approval pause/resume, reject→cancel, budget exhaustion→failed, ProviderError→failed, iteration bound→failed, unconfigured→created, planner fallback, planner parse) |
 
-Honest limit (unchanged): no live LLM call — no key configured; all model behaviour verified with a scripted in-process FakeGateway. Tools report `runner_unavailable` until `curvin-runner` (Phase 4) supplies real execution; plan steps are not auto-completed — real coding work (Phase 6) completes them with evidence.
+Honest limit (unchanged): no live LLM call — no key configured; all model behaviour verified with a scripted in-process FakeGateway. At the time of Phase 3 closeout tools reported `runner_unavailable` pending curvin-runner; as of Phase 4 they dispatch to the runner (see above). Plan steps are not auto-completed — real coding work (Phase 6) completes them with evidence.
 
-## Phase 4+ — planned (see docs/architecture/backend-architecture.md)
+## Phase 4 — curvin-runner (local tool execution)
 
-P4 curvin-runner · P5 context/memory · P6 real coding agent · P7 frontend integration · P8 GitHub · P9 app builder · P10 browser · P11 deployment — all `NOT_STARTED`.
+| ID | Task | Status | Files | Verification |
+| --- | --- | --- | --- | --- |
+| P4-1 | Runner + RunnerJob models, migration (queued → claimed → succeeded/failed), config knobs | VERIFIED | curvin-backend/app/models.py, migrations/versions/20261102_b4e2f6a81c53_phase_4_runner_schema.py, app/core/config.py | `alembic upgrade head` on a fresh SQLite DB creates all 11 tables; tz-naive SQLite datetimes normalised for the online-window check |
+| P4-2 | Runner API (register w/ one-time token + SHA-256 hash, list/online, heartbeat, atomic user-scoped claim, report w/ 409 guard) | VERIFIED | curvin-backend/app/api/v1/runners.py, app/schemas.py, app/main.py | TestClient tests: token 401s, lifecycle, double-report 409, cross-user claim isolation |
+| P4-3 | Dispatch layer (no-runner honesty, queued job + `tool_dispatched` event, bounded poll wait, `runner_timeout` closes job failed) wired into orchestrator for handler-less tools; approval gating still precedes dispatch | VERIFIED | curvin-backend/app/agent/runner_dispatch.py, orchestrator.py | full flow with a background claiming thread (second TestClient), timeout path, orchestrator end-to-end with simulated runner |
+| P4-4 | curvin-runner client (stdlib-only single file: register/heartbeat/claim/execute/report; path-jail sandbox, 120 s command timeout, 64 KB output cap, 500-entry listing cap; `~/.curvin-runner.json` chmod 600) | VERIFIED | curvin-runner/curvin_runner.py, curvin-runner/README.md | offline sandbox tests in tests/test_runner.py + `curvin_runner.py test` self-check passes (path jail, round-trip, terminal, unknown tool, truncation) |
+| P4-5 | Runner test suite | VERIFIED | curvin-backend/tests/test_runner.py | 80/80 pytest on Databricks serverless compute 2026-11-02 (69 prior + 11 new) |
+
+Honest limit: the backend and runner are verified against each other via simulated runners (background claim/report threads); no live Mac execution from this compute — the user launches `curvin-runner` locally per curvin-runner/README.md. No live LLM call yet.
+
+## Phase 5+ — planned (see docs/architecture/backend-architecture.md)
+
+P5 context/memory · P6 real coding agent · P7 frontend integration · P8 GitHub · P9 app builder · P10 browser · P11 deployment — all `NOT_STARTED`.
 
 ## Blockers / honest limits
 
@@ -53,4 +65,4 @@ P4 curvin-runner · P5 context/memory · P6 real coding agent · P7 frontend int
 - No Mac filesystem access from Databricks: all repository/terminal ops for user projects deferred to `curvin-runner` (Phase 4).
 - Postgres connectivity from this compute untested (psycopg2 unavailable here); Postgres validation happens on user machine / Render.
 - Notebooks-scoped pip installs on Databricks compute do not survive compute recycling — each session must reinstall deps before running tests (commands in curvin-backend/README.md). The workspace filesystem rejects `__pycache__` writes: run pytest from a /tmp copy of curvin-backend.
-- Runs now execute end-to-end through the orchestrator (Phase 3) when LLM_* settings are configured; without them they stay `created` — no fabricated progress. Tool execution still waits on `curvin-runner` (Phase 4).
+- Runs now execute end-to-end through the orchestrator when LLM_* settings are configured; without them they stay `created` — no fabricated progress. Runner-backed tools dispatch to `curvin-runner` (Phase 4, implemented): without an online runner they report `runner_unavailable` and nothing is queued. Live Mac execution still needs the user to run `curvin-runner` locally.
