@@ -1,10 +1,30 @@
-# CURVIN Backend — Agent Engine (Phase 1)
+# CURVIN Backend — Agent Engine (Phases 1–2)
 
 FastAPI modular monolith powering the CURVIN platform: persisted projects,
-conversations, agent runs, a replayable run-event log (SSE), approvals, and
-the run state machine. The autonomous orchestration loop, model gateway,
-GitHub integration, and the local runner land in later phases (see
-`../docs/architecture/backend-architecture.md`).
+conversations, agent runs, a replayable run-event log (SSE), approvals, the
+run state machine, and a provider-neutral model gateway with BYOK support.
+The autonomous orchestration loop, GitHub integration, and the local runner
+land in later phases (see `../docs/architecture/backend-architecture.md`).
+
+## What is real in Phase 2 — model gateway
+
+- `app/agent/gateway/` — provider-neutral gateway over any OpenAI-compatible
+  endpoint (OpenAI, OpenRouter, Groq, Together, vLLM, llama.cpp server): completions,
+  **streaming with tool-call fragment assembly**, and embeddings.
+- Logical roles (`fast`, `planning`, `code`, `verification`, `embedding`) with
+  per-model overrides (`LLM_FAST_MODEL` etc.), all falling back to `LLM_MODEL`.
+  Any subset may share one physical model — cheap setups work.
+- Bounded retries with backoff on 5xx/429/transport errors; 4xx fails fast with
+  `ProviderError`; token usage accounting; per-run `ExecutionBudget` enforcement
+  (call and token caps → `BudgetExceededError`, never unbounded loops).
+- `GET /api/v1/models` reports configuration status per role. It never exposes
+  keys — the BYOK key lives server-side only.
+- All provider interaction is tested against `httpx.MockTransport`: zero network,
+  zero keys, real parsing/retry/budget logic.
+
+**Honest limit:** no live provider call has been made yet (no key set). The
+first real smoke test happens the moment `LLM_*` env vars point at a real
+provider — the wire format is the standard OpenAI schema the mocks mirror.
 
 ## What is real in Phase 1
 
@@ -17,7 +37,7 @@ GitHub integration, and the local runner land in later phases (see
 ## What is explicitly NOT implemented yet (honest list)
 
 - Authentication is a placeholder: `X-User-Id` header (dev user default). Real session auth replaces it without schema change.
-- Model gateway (Phase 2), orchestrator/planner/tools (Phase 3), `curvin-runner` local execution (Phase 4), GitHub (Phase 8).
+- Orchestrator/planner/tool registry (Phase 3) — runs stay in `created` until then; `curvin-runner` local execution (Phase 4); GitHub (Phase 8).
 - `mode=github` projects are persisted as `importing` with an explicit pending-import task — not faked.
 
 ## Quickstart (local)
@@ -39,7 +59,9 @@ pip install -r requirements.txt
 pytest
 ```
 
-The suite (unit + TestClient integration incl. SSE replay) runs against a throwaway SQLite database — verified on the build compute 2026-11-01.
+The suite (unit + TestClient integration incl. SSE replay + gateway — 60 tests)
+runs against a throwaway SQLite database and httpx.MockTransport — verified on
+the build compute 2026-11-01.
 
 ## Migrations
 

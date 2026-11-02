@@ -16,7 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
-from app.api.v1 import approvals, conversations, health, projects, runs
+from app.api.v1 import approvals, conversations, health, models, projects, runs
 from app.core.config import get_settings
 
 
@@ -102,6 +102,7 @@ def create_app() -> FastAPI:
     # --------------------------------------------------------------- routes
 
     app.include_router(health.router, prefix="/api/v1")
+    app.include_router(models.router, prefix="/api/v1")
     app.include_router(projects.router, prefix="/api/v1")
     app.include_router(conversations.router, prefix="/api/v1")
     app.include_router(runs.router, prefix="/api/v1")
