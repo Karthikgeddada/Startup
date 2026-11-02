@@ -19,6 +19,7 @@ from starlette.requests import Request as StarletteRequest
 from app.api.v1 import (
     approvals,
     conversations,
+    extras,
     health,
     models,
     projects,
@@ -111,6 +112,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(models.router, prefix="/api/v1")
+    app.include_router(extras.router, prefix="/api/v1")
     app.include_router(projects.router, prefix="/api/v1")
     app.include_router(conversations.router, prefix="/api/v1")
     app.include_router(runs.router, prefix="/api/v1")

@@ -46,4 +46,7 @@ Cross-cutting: every mutating/reading path is user-scoped (`user_id` on all rows
 - **Phase 2:** model gateway (multi-provider, BYOK, roles, budgets).
 - **Phase 3:** orchestrator + planner + tool registry → real agent turns.
 - **Phase 4:** `curvin-runner` (local filesystem/terminal/git execution).
-- **Phase 5–10:** context/memory, GitHub, app builder, browser, deployment.
+- **Phase 5 (implemented):** context & memory (`app/agent/context.py`) — compacted conversation digest + runner-verified project file index.
+- **Phase 6 (implemented):** evidence-based step completion — run_tasks complete only with genuinely successful tool executions (`task_completed` carries the evidence).
+- **Phase 7 (implemented):** frontend real-mode — extras endpoints (`/me`, `/activity`, `/templates`, `/github/repositories`, `/recents`, `/search`) + the SSE agent consumer (`src/services/agent-stream.ts`) + live HTTP adapters; learn/discover stay static content.
+- **Phase 8–10 (future):** GitHub integration beyond listing, app builder, browser automation — no fabricated features exist for these yet.

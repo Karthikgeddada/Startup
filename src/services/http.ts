@@ -1,107 +1,100 @@
 import { apiFetch } from "@/services/client";
+import { httpAgent } from "@/services/agent-stream";
 import type {
-  AgentService,
   AuthService,
   ConversationsService,
   CurvinServices,
-  DiscoverService,
   GitHubService,
-  LearnService,
   ProjectsService,
   RecentsService,
   SearchService,
 } from "@/services/types";
 
 /**
- * HTTP adapters for the future CURVIN backend.
+ * HTTP adapters for the CURVIN backend (live mode, Phase 7).
  *
- * These map 1:1 onto the REST surface the backend is expected to expose and
- * the typed contracts in services/types.ts. Until the backend exists, the
- * service registry keeps the app on mock adapters; switching is a single
- * environment variable (NEXT_PUBLIC_USE_MOCKS=false).
+ * These map 1:1 onto the backend REST surface. Two honest exclusions:
+ * - learn/discover stay on the frontend's static content library (the
+ *   registry composes static adapters for them in live mode) until a content
+ *   backend exists.
+ * - The agent service is the SSE consumer in agent-stream.ts.
+ *
+ * The dev identity is the backend's placeholder user (X-User-Id header) until
+ * real authentication lands.
  */
 
+/** Dev identity placeholder — matches the backend default user until real auth. */
+const USER_ID = "user_dev";
+
+const identity = () => ({ "X-User-Id": USER_ID });
+const jsonIdentity = () => ({
+  "Content-Type": "application/json",
+  "X-User-Id": USER_ID,
+});
+
 const auth: AuthService = {
-  getCurrentUser: () => apiFetch("/api/v1/me"),
+  getCurrentUser: () => apiFetch("/api/v1/me", { headers: identity() }),
 };
 
 const projects: ProjectsService = {
-  listProjects: () => apiFetch("/api/v1/projects"),
-  getProject: (id) => apiFetch(`/api/v1/projects/${id}`),
+  listProjects: () => apiFetch("/api/v1/projects", { headers: identity() }),
+  getProject: (id) => apiFetch(`/api/v1/projects/${id}`, { headers: identity() }),
   createProject: (input) =>
     apiFetch("/api/v1/projects", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonIdentity(),
       body: JSON.stringify(input),
     }),
-  listActivity: (limit) => apiFetch(`/api/v1/activity?limit=${limit}`),
-  listTemplates: () => apiFetch("/api/v1/templates"),
-  listRepoFiles: (projectId) => apiFetch(`/api/v1/projects/${projectId}/files`),
+  listActivity: (limit) =>
+    apiFetch(`/api/v1/activity?limit=${limit}`, { headers: identity() }),
+  listTemplates: () => apiFetch("/api/v1/templates", { headers: identity() }),
+  listRepoFiles: (projectId) =>
+    apiFetch(`/api/v1/projects/${projectId}/files`, { headers: identity() }),
 };
 
 const github: GitHubService = {
-  listRepositories: () => apiFetch("/api/v1/github/repositories"),
+  /** Empty until GITHUB_TOKEN is configured server-side — the UI shows an
+   * honest empty state rather than fabricated repositories. */
+  listRepositories: () =>
+    apiFetch("/api/v1/github/repositories", { headers: identity() }),
 };
 
 const conversations: ConversationsService = {
-  listConversations: () => apiFetch("/api/v1/conversations"),
-  getConversation: (id) => apiFetch(`/api/v1/conversations/${id}`),
+  listConversations: () =>
+    apiFetch("/api/v1/conversations", { headers: identity() }),
+  getConversation: (id) =>
+    apiFetch(`/api/v1/conversations/${id}`, { headers: identity() }),
   createConversation: (input) =>
     apiFetch("/api/v1/conversations", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonIdentity(),
       body: JSON.stringify(input),
     }),
 };
 
-/** The live agent runs on the backend execution service, not on Vercel. */
-const agent: AgentService = {
-  /**
-   * Streaming turn transport lands together with the real execution service
-   * (SSE or chunked JSON). The frontend contract in services/types.ts is the
-   * source of truth; until the backend exists this adapter refuses loudly
-   * rather than pretending to stream.
-   */
-  runTurn: () =>
-    Promise.reject(
-      new Error(
-        "Agent turns require the CURVIN backend. Set NEXT_PUBLIC_USE_MOCKS=true until it is connected.",
-      ),
-    ),
-  resolveApproval: (conversationId, turnId, blockId, approved) =>
-    apiFetch(`/api/v1/conversations/${conversationId}/turns/${turnId}/approvals/${blockId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approved }),
-    }),
-};
-
-const learn: LearnService = {
-  listDomains: () => apiFetch("/api/v1/learn/domains"),
-  getDomain: (slug) => apiFetch(`/api/v1/learn/domains/${slug}`),
-};
-
-const discover: DiscoverService = {
-  listEntries: () => apiFetch("/api/v1/discover"),
-};
+/** The agent service (SSE run-event consumer) lives in agent-stream.ts. */
 
 const recents: RecentsService = {
-  listRecents: () => apiFetch("/api/v1/recents"),
+  listRecents: () => apiFetch("/api/v1/recents", { headers: identity() }),
 };
 
 const search: SearchService = {
   search: (query) =>
-    apiFetch(`/api/v1/search?q=${encodeURIComponent(query)}`),
+    apiFetch(`/api/v1/search?q=${encodeURIComponent(query)}`, {
+      headers: identity(),
+    }),
 };
 
-export const httpServices: CurvinServices = {
+/** Live-mode services. learn/discover stay static-content adapters and are
+ * composed in by the registry — the backend has no content endpoints yet. */
+export type HttpServices = Omit<CurvinServices, "learn" | "discover">;
+
+export const httpServices: HttpServices = {
   auth,
   projects,
   github,
   conversations,
-  agent,
-  learn,
-  discover,
+  agent: httpAgent,
   recents,
   search,
 };

@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     runner_job_timeout_seconds: float = 120.0
     runner_poll_interval_seconds: float = 0.5
 
+    # GitHub integration (Phase 8 scope) — without a token the repository
+    # listing returns an honest empty list, never fabricated repos.
+    github_token: str | None = None
+
     @property
     def cors_origins(self) -> list[str]:
         if self.frontend_url:

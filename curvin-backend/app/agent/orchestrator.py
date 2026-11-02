@@ -23,6 +23,11 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.agent.context import (
+    compact_history,
+    project_file_context,
+    record_file_facts,
+)
 from app.agent.events import emit_event, set_run_status
 from app.agent.gateway import (
     BudgetTracker,
@@ -292,7 +297,58 @@ def _invoke_tool(
             "outcome": outcome,
         },
     )
+    _observe_evidence(db, run, call, outcome)
     return outcome
+
+
+def _observe_evidence(
+    db: Session, run: AgentRun, call: ToolCallRequest, outcome: dict
+) -> None:
+    """Phase 5/6 after a tool outcome: index file facts, emit file events,
+    and complete the current plan step — only with successful execution
+    evidence (a failed or runner_unavailable outcome completes nothing)."""
+    if not outcome.get("ok"):
+        return
+
+    touched = record_file_facts(
+        db,
+        project_id=run.project_id,
+        tool=call.name,
+        arguments=call.arguments,
+        outcome=outcome,
+    )
+    if call.name in ("fs_read", "fs_list"):
+        emit_event(db, run.id, "file_inspected", {"tool": call.name, "paths": touched[:20]})
+    elif call.name == "fs_write":
+        emit_event(db, run.id, "file_modified", {"tool": call.name, "paths": touched[:20]})
+
+    # Evidence-based step completion (Phase 6): the in-progress task is done
+    # only because a tool genuinely succeeded; the next step starts.
+    task = db.scalar(
+        select(RunTask)
+        .where(RunTask.run_id == run.id, RunTask.status == "in_progress")
+        .order_by(RunTask.position)
+    )
+    if task is not None:
+        task.status = "done"
+        db.commit()
+        emit_event(
+            db,
+            run.id,
+            "task_completed",
+            {"taskId": task.id, "evidence": {"tool": call.name, "callId": call.id}},
+        )
+        nxt = db.scalar(
+            select(RunTask)
+            .where(RunTask.run_id == run.id, RunTask.status == "pending")
+            .order_by(RunTask.position)
+        )
+        if nxt is not None:
+            nxt.status = "in_progress"
+            db.commit()
+            emit_event(
+                db, run.id, "task_started", {"taskId": nxt.id, "description": nxt.description}
+            )
 
 
 def _approval_granted(db: Session, run_id: str) -> bool:
@@ -335,8 +391,8 @@ def _complete(db: Session, run: AgentRun, final_text: str, tool_blocks: list[dic
         {"kind": "text", "id": f"blk_{run.id}_text", "content": final_text}
     ]
     if tasks:
-        # Step statuses are the honest task statuses — no auto-"done": the real
-        # coding agent (Phase 6) completes steps with evidence.
+        # Step statuses reflect runner-verified evidence: a step is `done`
+        # only when a tool execution genuinely succeeded (Phase 6).
         blocks.append(
             {
                 "kind": "plan",
@@ -360,7 +416,14 @@ def _complete(db: Session, run: AgentRun, final_text: str, tool_blocks: list[dic
     db.add(message)
     db.commit()
     emit_event(
-        db, run.id, "run_completed", {"messageId": message.id, "summary": final_text[:500]}
+        db,
+        run.id,
+        "run_completed",
+        {
+            "messageId": message.id,
+            "summary": final_text[:500],
+            "text": final_text[:8000],
+        },
     )
     set_run_status(db, run.id, RunStatus.COMPLETED)
 
@@ -399,24 +462,10 @@ def _context(db: Session, run: AgentRun) -> list[dict]:
         messages.append({"role": "system", "content": f"Plan:\n{plan_lines}"})
 
     if run.conversation_id:
-        history = list(
-            db.scalars(
-                select(Message)
-                .where(Message.conversation_id == run.conversation_id)
-                .order_by(Message.created_at, Message.id)
-            ).all()
-        )
-        for m in history:
-            if m.role == "user":
-                messages.append({"role": "user", "content": m.content or ""})
-            else:
-                text = " ".join(
-                    b.get("content", "")
-                    for b in (m.blocks or [])
-                    if isinstance(b, dict) and b.get("kind") == "text" and b.get("content")
-                ).strip()
-                if text:
-                    messages.append({"role": "assistant", "content": text})
+        messages.extend(compact_history(db, run.conversation_id))
+    file_context = project_file_context(db, run.project_id)
+    if file_context is not None:
+        messages.append(file_context)
 
     # Replay this run's tool exchanges from the event log (resume support).
     events = list(

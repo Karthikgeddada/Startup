@@ -99,6 +99,7 @@ class UserMessageOut(BaseModel):
 
 class AgentTurnOut(BaseModel):
     id: str
+    runId: str | None = None
     role: Literal["agent"]
     status: str
     blocks: list[dict]
@@ -201,6 +202,60 @@ class JobResultIn(BaseModel):
     error: str | None = None
 
 
+# ---------------------------------------------------- extras (Phase 7)
+
+
+class UserProfileOut(BaseModel):
+    id: str
+    name: str
+    email: str
+    createdAt: datetime
+
+
+class ActivityItemOut(BaseModel):
+    id: str
+    projectId: str | None
+    description: str
+    createdAt: datetime
+
+
+class ProjectTemplateOut(BaseModel):
+    id: str
+    name: str
+    description: str
+    category: str
+    stack: list[str]
+
+
+class GitHubRepositoryOut(BaseModel):
+    id: str
+    owner: str
+    name: str
+    description: str
+    primaryLanguage: str | None
+    stars: int
+    isPrivate: bool
+    updatedAt: str
+
+
+class RecentItemOut(BaseModel):
+    id: str
+    type: str
+    title: str
+    subtitle: str | None
+    projectId: str | None
+    href: str
+    lastAccessedAt: datetime
+
+
+class SearchResultOut(BaseModel):
+    id: str
+    category: str
+    title: str
+    subtitle: str | None
+    href: str
+
+
 # -------------------------------------------------------------- serializers
 
 
@@ -249,6 +304,7 @@ def message_out(m: Message) -> UserMessageOut | AgentTurnOut:
         )
     return AgentTurnOut(
         id=m.id,
+        runId=m.run_id,
         role="agent",
         status=m.status or "completed",
         blocks=list(m.blocks or []),

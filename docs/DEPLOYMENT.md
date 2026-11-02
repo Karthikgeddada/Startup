@@ -51,10 +51,18 @@ against the mock layer.
 ## 4. Switching to the real backend
 
 1. Set `NEXT_PUBLIC_USE_MOCKS=false` and `NEXT_PUBLIC_API_BASE_URL`.
-2. The registry (`src/services/index.ts`) binds the HTTP adapters; the
-   contract in `services/types.ts` is the integration checklist.
-3. Keep the mock suite running in CI with `NEXT_PUBLIC_USE_MOCKS=true` — it is
+2. The registry (`src/services/index.ts`) binds the HTTP adapters
+   (auth/projects/github/conversations/agent/recents/search) and keeps the
+   static content adapters for learn/discover; the contract in
+   `services/types.ts` is the integration checklist.
+3. The agent service (`src/services/agent-stream.ts`) POSTs messages and
+   consumes the run SSE stream — same-origin CORS must allow the frontend
+   origin (the backend sets it from `FRONTEND_URL`).
+4. Keep the mock suite running in CI with `NEXT_PUBLIC_USE_MOCKS=true` — it is
    the fastest regression net for the UI.
+5. Run `npm run typecheck && npm run build` after pulling — that is the first
+   real gate for the Phase 7 adapters (they cannot be compiled on machines
+   without npm, e.g. the authoring compute).
 
 ## 5. CI (GitHub Actions, optional starter)
 
@@ -116,8 +124,15 @@ this (bounded waits fail honestly, never fabricate).
 * **curvin-runner** (your Mac — tool execution stays local by design):
   `python3 curvin_runner.py register --server https://<service>.onrender.com --root ~/CurvinProjects`
   then `python3 curvin_runner.py run`.
-* **Frontend** (Vercel): keep `NEXT_PUBLIC_USE_MOCKS=true` until Phase 7 ships
-  the HTTP adapters; then set it to `false` with
-  `NEXT_PUBLIC_API_BASE_URL=https://<service>.onrender.com`.
+* **Frontend** (Vercel): Phase 7 shipped the live adapters — set
+  `NEXT_PUBLIC_USE_MOCKS=false` and
+  `NEXT_PUBLIC_API_BASE_URL=https://<service>.onrender.com`, then run
+  `npm run typecheck && npm run build` locally or in CI (the adapters were
+  authored on a machine without npm and must pass this first real gate).
+* **Agent runs**: need `LLM_*` gateway settings on Render (see .env.example);
+  without them runs stay `created` — no fabricated progress. With a key but
+  no online runner, tools honestly report `runner_unavailable`.
+* **GitHub listing** (optional): set `GITHUB_TOKEN` on Render — without it
+  `/api/v1/github/repositories` returns an honest empty list.
 * **API consumers**: same base URL with `X-User-Id` (identity placeholder
   until real auth lands).

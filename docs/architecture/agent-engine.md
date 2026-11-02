@@ -61,7 +61,35 @@ Runner side (user's Mac):
 - Loop: heartbeat every 10 s, claim-poll every 2 s, execute, report. Commands: `register`, `status`, `run [--once] [--root DIR]`, `test` (offline sandbox self-check, no backend needed).
 - Sandbox: every filesystem path is jailed to the projects root (absolute paths rejected, `..` and symlink escapes rejected after `resolve()`), commands run with cwd inside the root under a 120 s timeout, outputs capped at 64 KB and listings at 500 entries before reporting. Token + root live in `~/.curvin-runner.json` (chmod 600).
 
-Verification: 80/80 pytest on Databricks serverless compute — 11 new tests in `tests/test_runner.py` (register/list with token never leaking, runner auth 401s, claim/report lifecycle incl. double-report 409, cross-user claim isolation, no-runner honesty with nothing queued, full dispatch flow with a background claiming thread, timeout closing the job failed, orchestrator end-to-end with a simulated runner, offline sandbox jail/truncation). `alembic upgrade head` on a fresh DB creates all 11 tables; `curvin_runner.py test` self-check passes offline. Honest limit: no live Mac execution from this compute — the user runs `curvin-runner` locally (see curvin-runner/README.md); no live LLM call yet.
+Verification: 87/87 pytest on Databricks serverless compute (tests incl. the 11 runner tests in `tests/test_runner.py`: token never leaking, runner auth 401s, claim/report lifecycle incl. double-report 409, cross-user claim isolation, no-runner honesty with nothing queued, full dispatch flow with a background claiming thread, timeout closing the job failed, orchestrator end-to-end with a simulated runner, offline sandbox jail/truncation). `alembic upgrade head` on a fresh DB creates all 11 tables; `curvin_runner.py test` self-check passes offline. Honest limit: no live Mac execution from this compute — the user runs `curvin-runner` locally (see curvin-runner/README.md); no live LLM call yet.
+
+## Context & memory (Phase 5 — implemented)
+
+`app/agent/context.py` gives the orchestrator bounded, honest memory:
+
+- **Conversation memory** (`compact_history`): the most recent 10 messages are kept verbatim; everything older collapses into ONE deterministic digest system message — each exchange truncated to 160 chars, clearly labelled "compacted — truncated, not summarised". Long conversations stay inside the model context without silently dropping history or inventing a summary.
+- **Project file index** (`record_file_facts` + `project_file_context`): the `project_files` table is filled ONLY from real tool outcomes (fs_list entries, fs_read/fs_write paths+bytes) — the index is never guessed. It is injected into run context as a bounded 40-file listing so the agent knows what exists before reading.
+
+Both are consumed by `orchestrator._context`, so approval-paused runs rebuild the same memory on resume. Verified in tests/test_context.py (digest content, verbatim window, index upserts, failed-outcome no-ops).
+
+## Evidence-based step completion (Phase 6 — implemented)
+
+Plan steps are never auto-completed. `orchestrator._observe_evidence` runs after every tool outcome:
+
+- A genuinely SUCCESSFUL tool execution completes the in-progress `run_task` — the `task_completed` event carries the evidence (`{tool, callId}`) — and starts the next task (`task_started`).
+- A failed or `runner_unavailable` outcome completes nothing; the step stays in progress and the model sees the honest failure.
+- `file_inspected` (fs_read/fs_list) and `file_modified` (fs_write) events + the project file index update flow from the same real outcomes.
+- `run_completed` carries the full final answer text (≤8 KB) so live frontends render the complete turn from the stream.
+
+Verified: successful handler-backed tool → tasks [done, in_progress] + evidence event; failed tool → nothing completed (tests/test_context.py).
+
+## Frontend real-mode integration (Phase 7 — implemented)
+
+- **Backend support endpoints** (`app/api/v1/extras.py`): `/me`, `/activity` (recent runs), `/templates` (static starters), `/github/repositories` (real listing only with GITHUB_TOKEN; honest `[]` otherwise), `/recents` (real conversations+projects), `/search` (projects/conversations/indexed files). No fabricated rows anywhere.
+- **Agent SSE consumer** (`src/services/agent-stream.ts`): `runTurn` POSTs the message, then reduces the run's persisted event log into `AgentTurn` snapshots — plan blocks from `plan_generated`/`task_started`/`task_completed`, tool blocks from `tool_invoked`/`tool_dispatched`/`tool_result`, approval blocks from `approval_required`/`approval_granted`/`approval_rejected`, error blocks from `error_occurred`. Streamed over fetch (not EventSource) so the X-User-Id header and AbortSignal both work; abort POSTs `/runs/{id}/cancel`. A 10-minute guard rejects honestly if a run never reaches a terminal state.
+- **Registry** (`src/services/index.ts`): `NEXT_PUBLIC_USE_MOCKS=false` swaps in HTTP adapters for auth/projects/github/conversations/agent/recents/search; learn/discover remain the static content library in BOTH modes (no content backend exists — they are never presented as live data).
+
+Honest limit: no npm on the Databricks compute — the frontend adapters are statically reviewed only; the first real gate is `npm run typecheck && npm run build` or CI on the user's machine. Backend pieces (extras endpoints) are tested: 87/87 pytest.
 
 ## Model gateway (Phase 2 — implemented)
 
