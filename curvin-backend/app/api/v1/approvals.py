@@ -1,14 +1,16 @@
 """Approval APIs — the human gate on agent execution.
 
-Approve: pending → approved; a run waiting on this gate resumes RUNNING.
+Approve: pending → approved; a run waiting on this gate resumes RUNNING and
+the orchestrator continues the loop from the persisted event log.
 Reject: pending → rejected; a run waiting on this gate is CANCELLED.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.agent import orchestrator
 from app.agent.events import emit_event, set_run_status
 from app.agent.state import InvalidTransition, RunStatus
 from app.api.v1.projects import current_user_id
@@ -31,7 +33,11 @@ def _get_approval(db: Session, user_id: str, approval_id: str) -> Approval:
 
 
 def _resolve(
-    db: Session, user_id: str, approval_id: str, approved: bool
+    db: Session,
+    user_id: str,
+    approval_id: str,
+    approved: bool,
+    background_tasks: BackgroundTasks,
 ) -> tuple[ApprovalOut, RunOut | None]:
     approval, run = _get_approval(db, user_id, approval_id)
     if approval.status != "pending":
@@ -56,6 +62,9 @@ def _resolve(
             )
         except InvalidTransition as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if approved:
+            # Continue the orchestration loop from the persisted event log.
+            background_tasks.add_task(orchestrator.resume_run, run.id)
 
     emit_event(
         db,
@@ -71,18 +80,24 @@ def _resolve(
 @router.post("/{approval_id}/approve")
 def approve(
     approval_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user_id: str = Depends(current_user_id),
 ) -> dict:
-    approval, run = _resolve(db, user_id, approval_id, approved=True)
+    approval, run = _resolve(
+        db, user_id, approval_id, approved=True, background_tasks=background_tasks
+    )
     return {"approval": approval.model_dump(mode="json"), "run": run.model_dump(mode="json") if run else None}
 
 
 @router.post("/{approval_id}/reject")
 def reject(
     approval_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user_id: str = Depends(current_user_id),
 ) -> dict:
-    approval, run = _resolve(db, user_id, approval_id, approved=False)
+    approval, run = _resolve(
+        db, user_id, approval_id, approved=False, background_tasks=background_tasks
+    )
     return {"approval": approval.model_dump(mode="json"), "run": run.model_dump(mode="json") if run else None}

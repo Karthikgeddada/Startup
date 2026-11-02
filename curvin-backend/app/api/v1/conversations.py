@@ -1,16 +1,19 @@
 """Conversation + message APIs.
 
-POST /{id}/messages persists the user message and creates an AgentRun in
-CREATED state. The autonomous execution loop (Phase 3) will drive that run;
-until then the run is persisted with its run_created event and NO fabricated
-progress — clients observe it through the run events endpoint.
+POST /{id}/messages persists the user message, creates an AgentRun in
+CREATED state, and schedules the orchestrator (Phase 3) as a background task.
+When the model gateway is unconfigured the run stays `created` with only its
+run_created event — no fabricated progress. Otherwise the run is driven
+planning → running → (bounded tool loop) → completed, observable through the
+run events endpoint.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.agent import orchestrator
 from app.agent.events import emit_event
 from app.api.v1.projects import current_user_id, ensure_user
 from app.core.database import get_db
@@ -104,6 +107,7 @@ def get_conversation(
 def send_message(
     conversation_id: str,
     payload: SendMessageIn,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user_id: str = Depends(current_user_id),
 ) -> SendMessageResult:
@@ -129,7 +133,9 @@ def send_message(
     db.commit()
 
     # Persisted run creation event — the honest starting point of the log.
-    # The orchestrator (Phase 3) picks the run up from here and drives it.
+    # The orchestrator (Phase 3) drives the run from here; an unconfigured
+    # gateway leaves it in `created` (no fabricated progress).
     emit_event(db, run.id, "run_created", {"goal": payload.content[:500]})
+    background_tasks.add_task(orchestrator.orchestrate_run, run.id)
 
     return SendMessageResult(message=message_out(message), run=run_out(run))
