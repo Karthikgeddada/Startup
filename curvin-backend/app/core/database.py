@@ -10,6 +10,7 @@ from collections.abc import Iterator
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 
@@ -21,7 +22,21 @@ class Base(DeclarativeBase):
 def _engine_kwargs(url: str) -> dict:
     if url.startswith("sqlite"):
         return {"connect_args": {"check_same_thread": False}}
-    return {}
+    if not url.startswith("postgresql"):
+        return {}
+    # Direct Postgres (no pooler): default pooling + prepared statements are fine.
+    if "pooler" not in url and ":6543/" not in url:
+        return {}
+    # Supabase/Render-style pgBouncer (transaction mode, port 6543):
+    # logical connections are handed to different server connections, so
+    # SQLAlchemy must not pool them (NullPool) and psycopg3 must not use
+    # server-side prepared statements or cached statements — all of that
+    # state leaks across pgBouncer's server connections and breaks mid-run.
+    kwargs: dict = {"poolclass": NullPool}
+    if url.startswith("postgresql+psycopg://"):
+        kwargs["connect_args"] = {"prepare_threshold": None}
+        kwargs["prepared_statement_cache_size"] = 0
+    return kwargs
 
 
 settings = get_settings()

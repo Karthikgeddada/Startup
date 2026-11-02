@@ -95,8 +95,14 @@ idempotent. Verified boot path: migrate → serve → `GET /api/v1/health` →
    postgresql+psycopg2://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require
    ```
 
-   Keep port **6543** (transaction pooler — direct connections don't survive
-   serverless-style pooling), the `+psycopg2` driver, and `sslmode=require`.
+   Both driver spellings work (both drivers ship in requirements.txt):
+   `postgresql+psycopg2://` (v2) or `postgresql+psycopg://` (v3 — Supabase's
+   newer Connect templates use this form). Keep port **6543** (transaction
+   pooler — direct connections don't survive serverless-style pooling) and
+   `sslmode=require`. The backend detects the pooler (`pooler` host or
+   `:6543`) and automatically disables connection pooling (NullPool) and
+   psycopg3 server-side prepared statements — both break behind pgBouncer's
+   transaction mode otherwise.
 
 ### 7.2 Render (API service)
 

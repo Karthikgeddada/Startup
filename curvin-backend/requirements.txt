@@ -1,7 +1,10 @@
 # CURVIN backend dependencies.
-# Local dev defaults to SQLite (stdlib) — everything below except psycopg2 is
-# needed for a plain local run; psycopg2-binary is only required when
-# DATABASE_URL points at Postgres (Supabase/Render).
+# Local dev defaults to SQLite (stdlib) — everything below except the Postgres
+# drivers is needed for a plain local run. Both drivers are shipped so either
+# DATABASE_URL spelling works in production (Supabase templates use the
+# psycopg3 `postgresql+psycopg://` form; our docs use psycopg2):
+#   postgresql+psycopg://  → psycopg[binary]  (v3)
+#   postgresql+psycopg2:// → psycopg2-binary (v2)
 fastapi>=0.111
 uvicorn[standard]>=0.30
 sqlalchemy>=2.0
@@ -10,4 +13,5 @@ pydantic>=2.7
 pydantic-settings>=2.3
 sse-starlette>=2.1
 httpx>=0.27
+psycopg[binary]>=3.1
 psycopg2-binary>=2.9
